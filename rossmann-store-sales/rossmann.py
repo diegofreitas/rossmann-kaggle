@@ -98,7 +98,7 @@ Xtrain, Xtest, Ytrain, Ytest = train_test_split(X, Y, test_size=0.1, random_stat
 
 print "Trainning"
 #regressor = linear_model.Lasso()
-regressor = GradientBoostingRegressor(n_estimators=100)
+regressor = ExtraTreesRegressor(n_estimators=100)
 #regressor = DummyRegressor()
 
 regressor.fit(Xtrain, Ytrain)
