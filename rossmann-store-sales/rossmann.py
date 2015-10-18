@@ -43,13 +43,13 @@ def load_data(file="train.csv"):
     df = pd.read_csv(file, dtype={
         'DayOfWeek': np.int,
         'Sales': np.float64,
-        'Store': np.int
+        'Store': np.int,
+        'SchoolHoliday': np.int
     })
     store = pd.read_csv("store.csv", low_memory=False)
     df = pd.merge(df, store, on='Store')
     #df.loc[(df.Open.isnull() & df.Sales > 0), 'Open'] = 1
     df.fillna(0, inplace=True)
-    df['SchoolHoliday'] = df['SchoolHoliday'].astype(int)
 
     if not hasattr(sh_encoder, "classes_"):
         df = df[df["Open"] != 0]
@@ -61,6 +61,7 @@ def load_data(file="train.csv"):
     if not hasattr(promo_interval_encoder, "classes_"):
         promo_interval_encoder.fit(df["PromoInterval"])
     if not sales.fitted:
+        df = df.loc[df.Sales > 0]
         sales.fit(df["Sales"])
         sales.fitted = True
 
@@ -72,21 +73,18 @@ def load_data(file="train.csv"):
 
     if 'Sales' in df.columns:
         sale_means = df.groupby(['Store', 'DayOfWeek', 'Promo']).mean().Sales
-        print sale_means.head()
         sale_means = sale_means.reset_index()
         sale_means.rename(columns={'Sales': 'Sales_Mean_Promo'}, inplace=True)
-        print sale_means.head()
-
-
 
     df = pd.merge(df, sale_means, on = ['Store','DayOfWeek','Promo'], how='left')
     df.fillna(0, inplace=True)
-    print df.head()
 
 
     #Test data set does not have  Sales
     if not 'Sales' in df.columns:
         df["Sales"] = np.zeros(df.shape[0])
+        #when test set is merged the order is messed up
+        df.sort(['Id'], inplace=True)
 
     #sales_comptdistance = scaler.transform(df[["CompetitionDistance", "Sales"]].values)
 
@@ -110,28 +108,25 @@ X, Y = load_data()
 #poly = PolynomialFeatures(degree=2)
 #X = poly.fit_transform(X.values)
 
-Xtrain, Xtest, Ytrain, Ytest = train_test_split(X, Y, test_size=0.1, random_state=42)
+Xtrain, Xtest, Ytrain, Ytest = train_test_split(X, Y, test_size=0.3, random_state=42)
 
 print "Trainning"
 #regressor = linear_model.Lasso()
 regressor = ExtraTreesRegressor(n_estimators=100)
-#regressor = DummyRegressor()
+#regressor = linear_model.Ridge()
 
-#regressor.fit(Xtrain, Ytrain)
+regressor.fit(Xtrain, Ytrain)
 
-#predicted = regressor.predict(Xtest)
+predicted = regressor.predict(Xtest)
 
-#print "RMSPE", rmspe(sales.inverse_transform(Ytest), sales.inverse_transform(predicted))
+print "RMSPE", rmspe(sales.inverse_transform(Ytest), sales.inverse_transform(predicted))
 
 #print "Refit"
-regressor.fit(X, Y)
+#regressor.fit(X, Y)
 
 X, Y = load_data("test.csv")
 
-
 predicted = sales.inverse_transform(regressor.predict(X))
-#to_scale = np.dstack([np.ones(len(Y)), predicted ])[0]
-#predicted = scaler.inverse_transform(to_scale)[:, 1:2].flatten()
 
 
 with open('submission_rossman.csv', 'wb') as csvfile:
