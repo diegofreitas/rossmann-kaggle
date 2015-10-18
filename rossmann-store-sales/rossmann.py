@@ -24,20 +24,22 @@ sh_encoder = LabelEncoder()
 ass_encoder = LabelEncoder()
 st_encoder = LabelEncoder()
 promo_interval_encoder = LabelEncoder()
-competition_dist = MinMaxScaler()
-competition_dist.fitted = False
+features_scaler = MinMaxScaler()
+features_scaler.fitted = False
 
 sales = MinMaxScaler()
 sales.fitted = False
+sale_means = None
 
 features = [ "DayOfWeek", "Open", "Promo", "StateHoliday",
-                "SchoolHoliday", "StoreType", "Assortment", "CompetitionDistance", "PromoInterval", "Store"]
+                "SchoolHoliday", "StoreType", "Assortment", "CompetitionDistance", "PromoInterval", "Store", "Promo2", 'Promo','Sales_Mean_Promo']
 
 categorical_features = [ header in ["DayOfWeek", "StateHoliday", "Assortment", "StoreType", "PromoInterval"] for header in features]
 print categorical_features
 one_hot_encoder = OneHotEncoder(categorical_features=categorical_features)
 
 def load_data(file="train.csv"):
+    global  sale_means
     df = pd.read_csv(file, dtype={
         'DayOfWeek': np.int,
         'Sales': np.float64,
@@ -50,6 +52,7 @@ def load_data(file="train.csv"):
     df['SchoolHoliday'] = df['SchoolHoliday'].astype(int)
 
     if not hasattr(sh_encoder, "classes_"):
+        df = df[df["Open"] != 0]
         sh_encoder.fit(df["StateHoliday"])
     if not hasattr(ass_encoder, "classes_"):
         ass_encoder.fit(df["Assortment"])
@@ -57,40 +60,53 @@ def load_data(file="train.csv"):
         st_encoder.fit(df["StoreType"])
     if not hasattr(promo_interval_encoder, "classes_"):
         promo_interval_encoder.fit(df["PromoInterval"])
-    if not competition_dist.fitted:
-        competition_dist.fit(df["CompetitionDistance"])
-        competition_dist.fitted = True
     if not sales.fitted:
         sales.fit(df["Sales"])
         sales.fitted = True
+
 
     df["StateHoliday"] = sh_encoder.transform(df["StateHoliday"])
     df["Assortment"] = ass_encoder.transform(df["Assortment"])
     df["StoreType"] = st_encoder.transform(df["StoreType"])
     df["PromoInterval"] = promo_interval_encoder.transform(df["PromoInterval"])
 
+    if 'Sales' in df.columns:
+        sale_means = df.groupby(['Store', 'DayOfWeek', 'Promo']).mean().Sales
+        print sale_means.head()
+        sale_means = sale_means.reset_index()
+        sale_means.rename(columns={'Sales': 'Sales_Mean_Promo'}, inplace=True)
+        print sale_means.head()
+
+
+
+    df = pd.merge(df, sale_means, on = ['Store','DayOfWeek','Promo'], how='left')
+    df.fillna(0, inplace=True)
+    print df.head()
+
+
     #Test data set does not have  Sales
     if not 'Sales' in df.columns:
         df["Sales"] = np.zeros(df.shape[0])
 
     #sales_comptdistance = scaler.transform(df[["CompetitionDistance", "Sales"]].values)
-    df["CompetitionDistance"] = competition_dist.transform(df["CompetitionDistance"])
+
+    if not features_scaler.fitted:
+        features_scaler.fit(df[["CompetitionDistance","Sales_Mean_Promo"]])
+        features_scaler.fitted = True
+    df[["CompetitionDistance","Sales_Mean_Promo"]] = features_scaler.transform(df[["CompetitionDistance","Sales_Mean_Promo"]])
     df["Sales"] = sales.transform(df["Sales"])
 
-    #print df.describe()
+    print df.head()
 
     if not hasattr(one_hot_encoder,"feature_indices_"):
         X = one_hot_encoder.fit(df[features].values)
     X = one_hot_encoder.transform(df[features].values).toarray()
-
-
     Y = df["Sales"]
 
     return X, Y
 
 
 X, Y = load_data()
-
 #poly = PolynomialFeatures(degree=2)
 #X = poly.fit_transform(X.values)
 
@@ -101,22 +117,22 @@ print "Trainning"
 regressor = ExtraTreesRegressor(n_estimators=100)
 #regressor = DummyRegressor()
 
-regressor.fit(Xtrain, Ytrain)
+#regressor.fit(Xtrain, Ytrain)
 
-predicted = regressor.predict(Xtest)
+#predicted = regressor.predict(Xtest)
 
-print "RMSPE", rmspe(sales.inverse_transform(Ytest), sales.inverse_transform(predicted))
-exit(0)
-print "Refit"
+#print "RMSPE", rmspe(sales.inverse_transform(Ytest), sales.inverse_transform(predicted))
+
+#print "Refit"
 regressor.fit(X, Y)
 
 X, Y = load_data("test.csv")
 
 
-predicted = regressor.predict(X)
+predicted = sales.inverse_transform(regressor.predict(X))
 #to_scale = np.dstack([np.ones(len(Y)), predicted ])[0]
 #predicted = scaler.inverse_transform(to_scale)[:, 1:2].flatten()
-print predicted
+
 
 with open('submission_rossman.csv', 'wb') as csvfile:
     writer = csv.writer(csvfile, delimiter=',')
