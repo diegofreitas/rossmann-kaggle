@@ -19,8 +19,12 @@ from sklearn.tree import DecisionTreeRegressor
 import numpy as np
 from utils import rmspe, rmspe_xg, rmspe_score
 import scipy
+from sklearn.grid_search import GridSearchCV
+
+from sklearn.svm import SVR
 
 rng = np.random.RandomState(1)
+
 
 sh_encoder = LabelEncoder()
 ass_encoder = LabelEncoder()
@@ -147,20 +151,18 @@ X, Y = load_data()
 #poly = PolynomialFeatures(degree=2)
 #X = poly.fit_transform(X)
 
-Xtrain, Xtest, Ytrain, Ytest = train_test_split(X, Y, test_size=0.1, random_state=42)
+#Xtrain, Xtest, Ytrain, Ytest = train_test_split(X, Y, test_size=0.1, random_state=42)
 
 print "Trainning"
 #regressor = linear_model.Lasso()
 #regressor = ExtraTreesRegressor(n_estimators=100, warm_start=True)
 
-params = [{'C': scipy.stats.expon(scale=100), 'gamma': scipy.stats.expon(scale=.1),
-  'kernel': ['rbf'], 'class_weight':['auto', None]}]
-
-regressor = linear_model.RidgeCV(scoring = rmspe_score, cv=4)
-#regressor = RandomForestRegressor(n_estimators=20, warm_start=True, verbose=5, n_jobs=6)
+#regressor = GridSearchCV(RandomForestRegressor(n_estimators=20, warm_start=True, n_jobs=6), param_grid={'C': [1, 10]}, scoring=rmspe_score, n_jobs=6, cv=)
+#regressor = linear_model.RidgeCV(scoring = rmspe_score, cv=4) 0.13
+regressor = RandomForestRegressor(n_estimators=100, warm_start=True, verbose=5, n_jobs=6, random_state=rng)
 #regressor = KernelRidge() #Memory Error
 #regressor = GradientBoostingRegressor(n_estimators=10,warm_start=True, verbose=4)
-
+#regressor = SVR(kernel='rbf', cache_size=1000)
 #regressor.fit(Xtrain, Ytrain)
 
 #predicted = regressor.predict(Xtest)
@@ -173,6 +175,7 @@ regressor.fit(X, Y)
 X, Y = load_data("test.csv")
 
 predicted = sales.inverse_transform(regressor.predict(X))
+
 
 with open('submission_rossman.csv', 'wb') as csvfile:
     writer = csv.writer(csvfile, delimiter=',')
