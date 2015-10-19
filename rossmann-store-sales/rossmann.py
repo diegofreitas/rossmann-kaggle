@@ -112,11 +112,11 @@ def load_data(file="train.csv"):
     df["p_4"] = p4_encoder.transform(df["p_4"])
 
     if 'Sales' in df.columns:
-        sale_means = df.groupby(['Store', 'DayOfWeek', 'Promo']).mean().Sales
+        sale_means = df.groupby(['Store', 'StoreType', 'Assortment', 'month', 'DayOfWeek', 'Promo']).mean().Sales
         sale_means = sale_means.reset_index()
         sale_means.rename(columns={'Sales': 'Sales_Mean_Promo'}, inplace=True)
 
-    df = pd.merge(df, sale_means, on=['Store', 'DayOfWeek', 'Promo'], how='left')
+    df = pd.merge(df, sale_means, on=['Store', 'StoreType', 'Assortment', 'month', 'DayOfWeek', 'Promo'], how='left')
     df.fillna(0, inplace=True)
 
 
@@ -129,11 +129,11 @@ def load_data(file="train.csv"):
     #sales_comptdistance = scaler.transform(df[["CompetitionDistance", "Sales"]].values)
 
     if not features_scaler.fitted:
-        features_scaler.fit(df[["CompetitionDistance", "Sales_Mean_Promo"]])
+        features_scaler.fit(df[["CompetitionDistance", "Sales_Mean_Promo", 'PromoOpen', 'CompetitionOpen']])
         features_scaler.fitted = True
 
-    df[["CompetitionDistance", "Sales_Mean_Promo"]] = features_scaler.transform(
-        df[["CompetitionDistance", "Sales_Mean_Promo"]])
+    df[["CompetitionDistance", "Sales_Mean_Promo", 'PromoOpen', 'CompetitionOpen']] = features_scaler.transform(
+        df[["CompetitionDistance", "Sales_Mean_Promo", 'PromoOpen', 'CompetitionOpen']])
     df["Sales"] = sales.transform(df["Sales"])
 
     store_id = store_id_hasher.transform(df.Store.astype(np.str)).toarray()
@@ -151,7 +151,7 @@ X, Y = load_data()
 #poly = PolynomialFeatures(degree=2)
 #X = poly.fit_transform(X)
 
-#Xtrain, Xtest, Ytrain, Ytest = train_test_split(X, Y, test_size=0.1, random_state=42)
+Xtrain, Xtest, Ytrain, Ytest = train_test_split(X, Y, test_size=0.1, random_state=42)
 
 print "Trainning"
 #regressor = linear_model.Lasso()
@@ -159,15 +159,15 @@ print "Trainning"
 
 #regressor = GridSearchCV(RandomForestRegressor(n_estimators=20, warm_start=True, n_jobs=6), param_grid={'C': [1, 10]}, scoring=rmspe_score, n_jobs=6, cv=)
 #regressor = linear_model.RidgeCV(scoring = rmspe_score, cv=4) 0.13
-regressor = RandomForestRegressor(n_estimators=100, warm_start=True, verbose=5, n_jobs=6, random_state=rng)
+regressor = RandomForestRegressor(n_estimators=30, warm_start=True, verbose=5, n_jobs=6, random_state=rng)
 #regressor = KernelRidge() #Memory Error
 #regressor = GradientBoostingRegressor(n_estimators=10,warm_start=True, verbose=4)
 #regressor = SVR(kernel='rbf', cache_size=1000)
-#regressor.fit(Xtrain, Ytrain)
+regressor.fit(Xtrain, Ytrain)
 
-#predicted = regressor.predict(Xtest)
+predicted = regressor.predict(Xtest)
 
-#print "RMSPE", rmspe(sales.inverse_transform(Ytest), sales.inverse_transform(predicted))
+print "RMSPE", rmspe(sales.inverse_transform(Ytest), sales.inverse_transform(predicted))
 #exit()
 print "Refit"
 regressor.fit(X, Y)
@@ -175,7 +175,6 @@ regressor.fit(X, Y)
 X, Y = load_data("test.csv")
 
 predicted = sales.inverse_transform(regressor.predict(X))
-
 
 with open('submission_rossman.csv', 'wb') as csvfile:
     writer = csv.writer(csvfile, delimiter=',')
