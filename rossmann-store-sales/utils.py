@@ -1,6 +1,7 @@
 __author__ = 'diego.freitas'
 
 import numpy as np
+from  sklearn.metrics import *
 def to_weight(y):
     w = np.zeros(y.shape, dtype=float)
     ind = y != 0
@@ -12,8 +13,8 @@ def rmspe( y,yhat):
     rmspe = np.sqrt(np.mean( w * (y - yhat)**2 ))
     return rmspe
 
-def rmspe_score(estimator, y, yhat):
-    return rmspe(y, estimator.predict(yhat))
+
+rmspe_score = make_scorer(greater_is_better = False, score_func=rmspe)
 
 def rmspe_xg(y, yhat):
     y = np.exp(y) - 1
