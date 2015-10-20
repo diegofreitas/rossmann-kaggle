@@ -1,5 +1,9 @@
 from matplotlib.backends.qt_editor.formlayout import fedit
 from sklearn.dummy import DummyRegressor
+from xgboost.sklearn import *
+import xgboost as xgb
+
+
 
 __author__ = 'diego.freitas'
 
@@ -9,7 +13,7 @@ import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 from sklearn.feature_extraction import FeatureHasher
 from sklearn.cross_validation import train_test_split
-from sklearn import linear_model
+from sklearn import linear_model, cross_validation
 from sklearn.metrics import *
 from sklearn.svm import SVR
 from sklearn.preprocessing import *
@@ -154,33 +158,80 @@ def load_data(file="train.csv"):
     return X, Y
 
 X, Y = load_data()
+
 #poly = PolynomialFeatures(degree=2)
 #X = poly.fit_transform(X)
 
-#Xtrain, Xtest, Ytrain, Ytest = train_test_split(X, Y, test_size=0.1, random_state=42)
+Xtrain, Xtest, Ytrain, Ytest = train_test_split(X, Y, test_size=0.2, random_state=42)
 
 #print "Trainning"
 #regressor = linear_model.Lasso()
 #regressor = ExtraTreesRegressor(n_estimators=100, warm_start=True)
 
+regressor = XGBRegressor(n_estimators=100,
+                         objective='reg:logistic',
+                         silent=False,
+                         max_depth=8)
+
 #regressor = GridSearchCV(RandomForestRegressor(n_estimators=20, warm_start=True, n_jobs=6), param_grid={'C': [1, 10]}, scoring=rmspe_score, n_jobs=6, cv=)
 #regressor = linear_model.RidgeCV(scoring = rmspe_score, cv=4) 0.13
-regressor = RandomForestRegressor(n_estimators=100, warm_start=True, verbose=5, n_jobs=6, random_state=rng)
+#regressor = RandomForestRegressor(n_estimators=100, warm_start=True, verbose=5, n_jobs=6, random_state=rng)
 #regressor = KernelRidge() #Memory Error
 #regressor = GradientBoostingRegressor(n_estimators=10,warm_start=True, verbose=4)
 #regressor = SVR(kernel='rbf', cache_size=1000)
-#regressor.fit(Xtrain, Ytrain)
 
-#predicted = regressor.predict(Xtest)
+params = {"objective": "reg:logistic",
+          "eta": 0.3,
+          "max_depth": 8,
+          "subsample": 1,
+          "colsample_bytree": 0.7,
+          "silent": 0
+}
+num_trees = 300
 
-#print "RMSPE", rmspe(sales.inverse_transform(Ytest), sales.inverse_transform(predicted))
-#exit()
+print("Train a XGBoost model")
+val_size = 100000
+# train = train.sort(['Date'])
+#print(train.tail(1)['Date'])
+Xtrain, Xtest,  Ytrain, Ytest = cross_validation.train_test_split(X,Y, test_size=0.1)
+#X_train, X_test = train.head(len(train) - val_size), train.tail(val_size)
+dtrain = xgb.DMatrix(Xtrain, Ytrain)
+dvalid = xgb.DMatrix(Xtest, Ytest)
+#dtest = xgb.DMatrix(test[features])
+watchlist = [(dvalid, 'eval'), (dtrain, 'train')]
+gbm = xgb.train(params, dtrain, num_trees, evals=watchlist, early_stopping_rounds=50, feval=rmspe_xg, verbose_eval=True)
+
+print("Validating")
+train_probs = gbm.predict(xgb.DMatrix(Xtest))
+indices = train_probs < 0
+train_probs[indices] = 0
+error = rmspe(Ytest, sales.inverse_transform(train_probs))
+print('error', error)
+
+
+
+'''
+regressor.fit(Xtrain, Ytrain, verbose=True, eval_metric=rmspe_xg)
+
+
+predicted = regressor.predict(Xtest)
+
+print "RMSPE", rmspe(sales.inverse_transform(Ytest), sales.inverse_transform(predicted))
+exit()
 print "Refit"
-regressor.fit(X, Y)
-
+regressor.fit(X, Y,  eval_metric=rmspe_xg)
+'''
 X, Y = load_data("test.csv")
 
-predicted = sales.inverse_transform(regressor.predict(X))
+
+print("Make predictions on the test set")
+test_probs = gbm.predict(xgb.DMatrix(X))
+indices = test_probs < 0
+test_probs[indices] = 0
+#submission = pd.DataFrame({"Id": test["Id"], "Sales": np.exp(test_probs) - 1})
+#submission.to_csv("xgboost_kscript_submission.csv", index=False)
+
+predicted = sales.inverse_transform(test_probs)
 
 with open('submission_rossman.csv', 'wb') as csvfile:
     writer = csv.writer(csvfile, delimiter=',')

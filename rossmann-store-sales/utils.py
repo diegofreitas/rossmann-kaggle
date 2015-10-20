@@ -16,7 +16,8 @@ def rmspe( y,yhat):
 
 rmspe_score = make_scorer(greater_is_better = False, score_func=rmspe)
 
-def rmspe_xg(y, yhat):
+def rmspe_xg(yhat, y):
+    y = y.get_label()
     y = np.exp(y) - 1
     yhat = np.exp(yhat) - 1
     w = to_weight(y)
